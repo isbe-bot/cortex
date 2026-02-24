@@ -291,6 +291,12 @@ function cmdOrphans() {
 }
 
 function cmdSeed() {
+  // Guard: don't double-seed
+  const existing = tasks.listTasks({});
+  if (existing.length > 0) {
+    console.log(`Seed skipped: DB already has ${existing.length} task(s). Use 'list' to view.`);
+    return;
+  }
   const parentId = tasks.createTask({
     title: 'Build CORTEX — Agent Coordination System',
     project: 'cortex',
