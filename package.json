@@ -1,0 +1,13 @@
+{
+  "name": "cortex",
+  "version": "1.0.0",
+  "description": "CORTEX — Agent coordination and task tracking system",
+  "main": "cortex.js",
+  "scripts": {
+    "init": "node db/init.js",
+    "seed": "node cortex.js seed"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.0.0"
+  }
+}
