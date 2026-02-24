@@ -290,6 +290,121 @@ function cmdOrphans() {
   }
 }
 
+function splitDescription(text) {
+  const raw = text || '';
+  if (!raw) return { description: '', notes: '' };
+  const parts = raw.split(/\n\n+/);
+  if (parts.length === 1) return { description: raw, notes: '' };
+  const description = parts.shift();
+  const notes = parts.join('\n\n');
+  return { description, notes };
+}
+
+function formatSubtasks(rows) {
+  if (!rows.length) return 'Subtasks: (none)';
+  const lines = ['Subtasks:'];
+  for (const s of rows) {
+    lines.push(`  #${s.id} ${s.title} [${s.status}] ${s.progress || 0}%`);
+  }
+  return lines.join('\n');
+}
+
+function cmdBrief(args) {
+  const id = Number(args[0]);
+  if (!id) die('Task id required');
+  const task = tasks.getTask(id);
+  if (!task) die(`Task #${id} not found`);
+
+  const subs = tasks.listTasks({ parent_task_id: id });
+  const { description, notes } = splitDescription(task.description);
+  const step = task.step || '(none)';
+  const progress = `${task.progress || 0}%`;
+  const retry = task.retry_count || 0;
+  const blocked = task.blocked_reason || '(none)';
+  const needsInput = task.needs_input ? 'yes' : 'no';
+
+  console.log(`CORTEX TASK BRIEF — #${task.id}`);
+  console.log('=======================');
+  console.log(`Title:        ${task.title}`);
+  console.log(`Project:      ${task.project || '(none)'}`);
+  console.log(`Assignee:     ${task.assignee || '(none)'}`);
+  console.log(`Priority:     ${task.priority || 'normal'}`);
+  console.log(`Status:       ${task.status}`);
+  console.log(`Step:         ${step}`);
+  console.log(`Progress:     ${progress}`);
+  console.log(`Retry Count:  ${retry}`);
+  console.log('');
+  console.log('Description:');
+  console.log(description ? description : '(none)');
+  console.log('');
+  console.log(`Blocked Reason: ${blocked}`);
+  console.log(`Needs Input:    ${needsInput}`);
+  console.log('');
+  console.log(formatSubtasks(subs));
+  console.log('');
+  console.log('Notes/History:');
+  console.log(notes ? notes : '(none)');
+}
+
+function cmdNext(args, opts) {
+  const filters = {
+    status: 'todo',
+    assignee: opts.assign,
+    project: opts.project,
+  };
+  const rows = tasks.listTasks(filters);
+  if (rows.length === 0) {
+    if (opts.assign) {
+      console.log(`No todo tasks found for ${opts.assign}.`);
+    } else {
+      console.log('No todo tasks found.');
+    }
+    return;
+  }
+
+  const priorityRank = { urgent: 0, high: 1, normal: 2, low: 3 };
+  rows.sort((a, b) => {
+    const pa = priorityRank[a.priority || 'normal'] ?? 2;
+    const pb = priorityRank[b.priority || 'normal'] ?? 2;
+    if (pa !== pb) return pa - pb;
+    return a.id - b.id;
+  });
+
+  const task = rows[0];
+  const who = opts.assign || 'queue';
+  console.log(`NEXT TASK FOR ${who}:`);
+  console.log('');
+  console.log(`  #${task.id}  ${task.title}`);
+  console.log(`       Project:  ${task.project || '(none)'} | Priority: ${task.priority || 'normal'} | Status: ${task.status}`);
+  console.log(`       Description: ${task.description || '(none)'}`);
+}
+
+function cmdResume(args) {
+  const id = Number(args[0]);
+  if (!id) die('Task id required');
+  const task = tasks.getTask(id);
+  if (!task) die(`Task #${id} not found`);
+
+  console.log(`RESUMING TASK #${task.id}`);
+  console.log('=================');
+  cmdBrief([id]);
+  console.log('');
+
+  const retry = task.retry_count || 0;
+  const lastStep = task.step || (retry > 0 ? '(none)' : '(none — starting fresh)');
+  const blocked = task.blocked_reason || '(none)';
+  let suggestion = 'Start from the beginning — no prior attempt recorded.';
+  if (retry > 0) {
+    suggestion = `Resume from last step. Previous failure: ${blocked} — address this before proceeding.`;
+  }
+
+  console.log('CONTINUATION CONTEXT:');
+  console.log(`  Last step:      ${lastStep}`);
+  console.log(`  Retry count:    ${retry}`);
+  console.log(`  Last blocked:   ${blocked}`);
+  console.log(`  Suggestion:     ${suggestion}`);
+}
+
 function cmdSeed() {
   // Guard: don't double-seed
   const existing = tasks.listTasks({});
@@ -355,6 +470,9 @@ function main() {
       case 'cancel': return cmdCancel(args);
       case 'status': return cmdStatus(args, opts);
       case 'orphans': return cmdOrphans();
+      case 'brief': return cmdBrief(args, opts);
+      case 'next': return cmdNext(args, opts);
+      case 'resume': return cmdResume(args, opts);
       case 'seed': return cmdSeed();
       default:
         die(`Unknown command: ${cmd}`);
