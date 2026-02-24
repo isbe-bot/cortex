@@ -1,2 +1,29 @@
+# Dependencies
 node_modules/
+
+# Database (local state — never commit)
 db/cortex.db
+db/cortex.db-wal
+db/cortex.db-shm
+
+# Environment & secrets
+.env
+.env.*
+.secrets/
+*.key
+*.pem
+*.p12
+*credentials*
+*password*
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
