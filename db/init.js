@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const { applyMigrations, markAllMigrationsApplied } = require('./migrations');
 
-const dbPath = path.join(__dirname, 'cortex.db');
+const dbPath = process.env.CORTEX_DB_PATH || path.join(__dirname, 'cortex.db');
 const schemaPath = path.join(__dirname, 'schema.sql');
 
 function init() {
@@ -11,18 +12,35 @@ function init() {
     process.exit(1);
   }
 
+  const isNew = !fs.existsSync(dbPath);
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const schema = fs.readFileSync(schemaPath, 'utf8');
   const db = new Database(dbPath);
 
   try {
-    db.exec(schema);
-    console.log('CORTEX database initialized at', dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+
+    if (isNew) {
+      db.exec(schema);
+      const marked = markAllMigrationsApplied(db);
+      console.log('CORTEX database initialized at', dbPath);
+      console.log(`Marked ${marked.total} migration(s) as applied for fresh schema`);
+    } else {
+      const result = applyMigrations(db);
+      console.log('CORTEX database migrated at', dbPath);
+      console.log(`Applied ${result.applied.length}/${result.total} migration(s)`);
+    }
   } catch (err) {
-    console.error('Failed to initialize database:', err.message);
+    console.error('Failed to initialize/migrate database:', err.message);
     process.exit(1);
   } finally {
     db.close();
   }
 }
 
-init();
+if (require.main === module) {
+  init();
+}
+
+module.exports = { init };

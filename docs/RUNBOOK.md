@@ -11,6 +11,13 @@ npm test
 node cortex.js status
 ```
 
+Use a non-default DB path when needed:
+
+```bash
+CORTEX_DB_PATH=~/.local/share/cortex/cortex.sqlite node db/init.js
+CORTEX_DB_PATH=~/.local/share/cortex/cortex.sqlite node cortex.js status
+```
+
 ## Daily operations
 
 ```bash
@@ -52,11 +59,32 @@ cp ~/backups/cortex/<backup>.sqlite db/cortex.db
 node cortex.js status
 ```
 
+## Migrations
+
+`db/init.js` initializes fresh databases and applies deterministic migrations to existing databases. Applied migration checksums are stored in `schema_migrations`.
+
+```bash
+node db/init.js
+sqlite3 db/cortex.db 'select version, filename, applied_at from schema_migrations order by version;'
+```
+
+## Automation / JSON output
+
+Use `--json` for automation-safe output:
+
+```bash
+node cortex.js add "Smoke" --project cortex --json
+node cortex.js get 1 --json
+node cortex.js status --project cortex --json
+node cortex.js stats --json
+```
+
 ## Health checks
 
 ```bash
 npm test
 node cortex.js status
+node cortex.js status --json
 node cortex.js list --tree
 ```
 

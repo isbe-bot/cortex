@@ -10,8 +10,12 @@ function die(msg) {
   process.exit(1);
 }
 
+function resolveDbPath() {
+  return process.env.CORTEX_DB_PATH || path.join(__dirname, 'db', 'cortex.db');
+}
+
 function ensureDb() {
-  const dbPath = path.join(__dirname, 'db', 'cortex.db');
+  const dbPath = resolveDbPath();
   if (!fs.existsSync(dbPath)) {
     die('Database not initialized. Run: node db/init.js');
   }
@@ -45,6 +49,10 @@ function parseArgs(argv) {
     }
   }
   return { args, opts };
+}
+
+function printJSON(value) {
+  console.log(JSON.stringify(value, null, 2));
 }
 
 function formatList(rows) {
@@ -150,7 +158,11 @@ function cmdAdd(args, opts) {
     tasks.addDependency(id, depId);
   }
 
-  console.log(`Created task #${id}`);
+  if (opts.json) {
+    printJSON({ id, task: tasks.getTask(id) });
+  } else {
+    console.log(`Created task #${id}`);
+  }
 }
 
 function buildFilters(opts) {
@@ -169,6 +181,10 @@ function cmdList(args, opts) {
   const filters = buildFilters(opts);
 
   const rows = tasks.listTasks(filters);
+  if (opts.json) {
+    printJSON({ count: rows.length, filters, tasks: rows });
+    return;
+  }
   if (opts.tree) {
     const tree = buildTree(rows);
     const data = tree.map(({ row, depth }) => ({
@@ -186,11 +202,19 @@ function cmdList(args, opts) {
   }
 }
 
-function cmdGet(args) {
+function cmdGet(args, opts = {}) {
   const id = Number(args[0]);
   if (!id) die('Task id required');
   const task = tasks.getTask(id);
   if (!task) die(`Task #${id} not found`);
+
+  const subs = tasks.getSubtasks(task.id);
+  const deps = tasks.listDependencies(task.id);
+  const logs = tasks.listTaskLog(task.id, 25);
+  if (opts.json) {
+    printJSON({ task, subtasks: subs, dependencies: deps, log: logs });
+    return;
+  }
 
   console.log(`ID: ${task.id}`);
   console.log(`Title: ${task.title}`);
@@ -220,7 +244,6 @@ function cmdGet(args) {
     console.log(`Cycle Time: ${formatDuration(cycleMs)}`);
   }
 
-  const subs = tasks.getSubtasks(task.id);
   if (subs.length) {
     console.log('\nSubtasks:');
     for (const s of subs) {
@@ -228,7 +251,6 @@ function cmdGet(args) {
     }
   }
 
-  const deps = tasks.listDependencies(task.id);
   if (deps.length) {
     console.log('\nDependencies:');
     for (const d of deps) {
@@ -236,10 +258,9 @@ function cmdGet(args) {
     }
   }
 
-  const logs = tasks.listTaskLog(task.id, 5);
   if (logs.length) {
     console.log('\nRecent Log:');
-    for (const entry of logs) {
+    for (const entry of logs.slice(0, 5)) {
       console.log(`  ${entry.timestamp} [${entry.agent || '-'}] ${entry.action || ''} ${entry.message || ''}`.trim());
     }
   }
@@ -290,15 +311,20 @@ function cmdUpdate(args, opts) {
   if (!changed) {
     die('No changes applied');
   }
-  console.log(`Updated task #${id}`);
+  if (opts.json) {
+    printJSON({ id, changed, task: tasks.getTask(id) });
+  } else {
+    console.log(`Updated task #${id}`);
+  }
 }
 
-function cmdBlock(args) {
+function cmdBlock(args, opts = {}) {
   const id = Number(args[0]);
   const reason = args[1];
   if (!id || !reason) die('Usage: block <id> "reason"');
   tasks.setStatus(id, 'blocked', { blocked_reason: reason });
-  console.log(`Task #${id} blocked`);
+  if (opts.json) printJSON({ id, status: 'blocked', task: tasks.getTask(id) });
+  else console.log(`Task #${id} blocked`);
 }
 
 function cmdFail(args, opts) {
@@ -315,14 +341,16 @@ function cmdFail(args, opts) {
       retry_count: retry,
       blocked_reason: reason,
     });
-    console.log(`Task #${id} set to in-progress (retry ${retry})`);
+    if (opts.json) printJSON({ id, status: 'in-progress', retry_count: retry, task: tasks.getTask(id) });
+    else console.log(`Task #${id} set to in-progress (retry ${retry})`);
   } else {
     tasks.setStatus(id, 'failed', { blocked_reason: reason });
-    console.log(`Task #${id} failed`);
+    if (opts.json) printJSON({ id, status: 'failed', task: tasks.getTask(id) });
+    else console.log(`Task #${id} failed`);
   }
 }
 
-function cmdInput(args) {
+function cmdInput(args, opts = {}) {
   const id = Number(args[0]);
   const question = args[1];
   if (!id || !question) die('Usage: input <id> "question"');
@@ -331,7 +359,8 @@ function cmdInput(args) {
     needs_input: 1,
     input_question: question,
   });
-  console.log(`Task #${id} flagged for input`);
+  if (opts.json) printJSON({ id, status: 'needs-input', task: tasks.getTask(id) });
+  else console.log(`Task #${id} flagged for input`);
 }
 
 function cmdDone(args, opts) {
@@ -361,20 +390,21 @@ function cmdDone(args, opts) {
     });
   }
 
-  console.log(`Task #${id} marked done`);
+  if (opts.json) printJSON({ id, status: 'done', task: tasks.getTask(id) });
+  else console.log(`Task #${id} marked done`);
 }
 
-function cmdCancel(args) {
+function cmdCancel(args, opts = {}) {
   const id = Number(args[0]);
   if (!id) die('Task id required');
   tasks.setStatus(id, 'cancelled');
-  console.log(`Task #${id} cancelled`);
+  if (opts.json) printJSON({ id, status: 'cancelled', task: tasks.getTask(id) });
+  else console.log(`Task #${id} cancelled`);
 }
 
 function cmdStatus(args, opts) {
   const project = opts.project;
   const now = new Date().toISOString().slice(0, 10);
-  console.log(`📋 CORTEX Status — ${now}\n`);
 
   const needsInput = tasks.listByStatus('needs-input', project);
   const failed = tasks.listByStatus('failed', project);
@@ -382,6 +412,22 @@ function cmdStatus(args, opts) {
   const inProgress = tasks.listByStatus('in-progress', project);
   const todo = tasks.listByStatus('todo', project);
   const doneToday = tasks.listDoneToday(project);
+
+  if (opts.json) {
+    printJSON({
+      generated_at: new Date().toISOString(),
+      project: project || null,
+      needs_input: needsInput,
+      failed,
+      blocked,
+      in_progress: inProgress,
+      todo,
+      done_today: doneToday,
+    });
+    return;
+  }
+
+  console.log(`📋 CORTEX Status — ${now}\n`);
 
   function section(title, rows, formatter) {
     console.log(title + ` (${rows.length})`);
@@ -670,8 +716,12 @@ function cmdLog(args) {
   console.log(`Logged entry for task #${id}`);
 }
 
-function cmdStats() {
+function cmdStats(args = [], opts = {}) {
   const stats = tasks.getStats();
+  if (opts.json) {
+    printJSON(stats);
+    return;
+  }
   console.log('CORTEX STATS');
   console.log('============');
   console.log(`Completed this week: ${stats.completedThisWeek}`);
@@ -748,8 +798,12 @@ function cmdMove(args, opts) {
   console.log(`Task #${id} reassigned to ${assignee}`);
 }
 
-function cmdOverdue() {
+function cmdOverdue(args = [], opts = {}) {
   const rows = tasks.listOverdue();
+  if (opts.json) {
+    printJSON({ count: rows.length, tasks: rows });
+    return;
+  }
   if (!rows.length) {
     console.log('No overdue tasks.');
     return;
@@ -763,22 +817,22 @@ function cmdHelp() {
     '',
     '  help                               Show this help',
     '  ask "question"                      Natural language query',
-    '  add "title" [--desc "..."] [--assign name] [--project name] [--priority high|normal|low|urgent] [--tag name] [--recur daily|weekly|monthly] [--due YYYY-MM-DD] [--depends <id>] [--parent <id>] [--step "..."]',
-    '  list [--status todo|in-progress|done|blocked|failed|cancelled|needs-input] [--assign name] [--project name] [--priority level] [--tag name] [--tree]',
-    '  get <id>',
-    '  update <id> [--status ...] [--progress <0-100>] [--step "..."] [--assign name] [--project name] [--priority level] [--tag name] [--recur daily|weekly|monthly] [--due YYYY-MM-DD] [--depends <id>] [--parent <id>] [--title "..."] [--notes "..."]',
-    '  block <id> "reason"',
-    '  fail <id> "reason" [--retry]',
-    '  input <id> "question"',
-    '  done <id> [--notes "..."]',
-    '  cancel <id>',
+    '  add "title" [--desc "..."] [--assign name] [--project name] [--priority high|normal|low|urgent] [--tag name] [--recur daily|weekly|monthly] [--due YYYY-MM-DD] [--depends <id>] [--parent <id>] [--step "..."] [--json]',
+    '  list [--status todo|in-progress|done|blocked|failed|cancelled|needs-input] [--assign name] [--project name] [--priority level] [--tag name] [--tree] [--json]',
+    '  get <id> [--json]',
+    '  update <id> [--status ...] [--progress <0-100>] [--step "..."] [--assign name] [--project name] [--priority level] [--tag name] [--recur daily|weekly|monthly] [--due YYYY-MM-DD] [--depends <id>] [--parent <id>] [--title "..."] [--notes "..."] [--json]',
+    '  block <id> "reason" [--json]',
+    '  fail <id> "reason" [--retry] [--json]',
+    '  input <id> "question" [--json]',
+    '  done <id> [--notes "..."] [--json]',
+    '  cancel <id> [--json]',
     '  log <id> "message"',
-    '  stats',
+    '  stats [--json]',
     '  archive --before <days>d',
     '  export --format json|csv|md [--status ...] [--assign name] [--project name] [--priority level] [--tag name]',
     '  move <id> --assign name',
-    '  overdue',
-    '  status [--project name]',
+    '  overdue [--json]',
+    '  status [--project name] [--json]',
     '  orphans',
     '  brief <id> [--inject]',
     '  next [--assign name] [--project name]',
@@ -814,19 +868,19 @@ function main() {
       case 'ask': return cmdAsk(args, opts);
       case 'add': return cmdAdd(args, opts);
       case 'list': return cmdList(args, opts);
-      case 'get': return cmdGet(args);
+      case 'get': return cmdGet(args, opts);
       case 'update': return cmdUpdate(args, opts);
-      case 'block': return cmdBlock(args);
+      case 'block': return cmdBlock(args, opts);
       case 'fail': return cmdFail(args, opts);
-      case 'input': return cmdInput(args);
+      case 'input': return cmdInput(args, opts);
       case 'done': return cmdDone(args, opts);
-      case 'cancel': return cmdCancel(args);
+      case 'cancel': return cmdCancel(args, opts);
       case 'log': return cmdLog(args);
-      case 'stats': return cmdStats();
+      case 'stats': return cmdStats(args, opts);
       case 'archive': return cmdArchive(args, opts);
       case 'export': return cmdExport(args, opts);
       case 'move': return cmdMove(args, opts);
-      case 'overdue': return cmdOverdue();
+      case 'overdue': return cmdOverdue(args, opts);
       case 'status': return cmdStatus(args, opts);
       case 'orphans': return cmdOrphans();
       case 'brief': return cmdBrief(args, opts);

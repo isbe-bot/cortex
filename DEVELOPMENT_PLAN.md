@@ -178,8 +178,8 @@ No dashboard should be built until these contracts are stable enough to avoid th
 - [ ] Add CI test workflow.
 - [ ] Add architecture/development/runbook docs.
 - [ ] Add config example and repo install prompt.
-- [ ] Add JSON output mode to critical commands.
-- [ ] Make schema/migrations deterministic and idempotent.
+- [x] Add JSON output mode to critical commands.
+- [x] Make schema/migrations deterministic and idempotent.
 
 ### Phase 2 — Identity, audit, lifecycle
 
@@ -234,6 +234,7 @@ Every slice should pass:
 ```bash
 npm test
 node cortex.js status
+node cortex.js status --json
 node cortex.js list --project cortex
 ```
 

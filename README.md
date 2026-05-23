@@ -23,7 +23,7 @@ Current implementation:
 - `lib/display.js` — terminal formatting
 - `db/schema.sql` — SQLite schema
 - `db/cortex.db` — local operational DB, ignored by git
-- `db/migrations/` — early migration files
+- `db/migrations/` — deterministic migration files tracked in `schema_migrations`
 - `tests/` — Node test suite
 
 Target v2 architecture is documented in [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -42,6 +42,7 @@ npm test
 node cortex.js add "Title" --desc "description" --assign isbe --project cms --priority high --step "phase-1/init"
 node cortex.js list --tree
 node cortex.js get 1
+node cortex.js get 1 --json
 node cortex.js update 1 --status in-progress --progress 40 --step "phase-2" --notes "extra details" --session ABC123
 node cortex.js block 1 "waiting on API keys"
 node cortex.js fail 1 "test failure"
@@ -50,6 +51,7 @@ node cortex.js input 1 "Need approval to proceed"
 node cortex.js done 1 --notes "completed and validated"
 node cortex.js cancel 1
 node cortex.js status --project cortex
+node cortex.js status --project cortex --json
 node cortex.js orphans
 node cortex.js seed
 ```
@@ -72,6 +74,8 @@ node cortex.js get 42
 
 ## Notes
 
+- `db/init.js` initializes fresh databases and applies deterministic migrations to existing databases. Set `CORTEX_DB_PATH=/path/to/cortex.sqlite` to use a non-default database path.
+- Critical commands support `--json` for automation: `add`, `list`, `get`, `update`, `block`, `fail`, `input`, `done`, `cancel`, `status`, `stats`, and `overdue`.
 - Default `list` output excludes tasks that are `done` or `cancelled` unless a `--status` filter is specified.
 - `--tree` output indents subtasks beneath parent tasks.
 - `status` highlights needs-input, failed, blocked, in-progress, todo, and tasks done today.
