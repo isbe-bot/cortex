@@ -183,6 +183,9 @@ Current endpoints:
 - `GET /v1/tasks` — requires `read`.
 - `GET /v1/tasks/:id` — requires `read`.
 - `POST /v1/tasks` — requires `write`.
+- `GET /v1/reports/summary` — Mission Control summary (requires `read`).
+- `GET /v1/reports/blocked` — currently blocked tasks.
+- `GET /v1/reports/overdue` — overdue tasks.
 
 Example:
 
