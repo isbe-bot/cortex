@@ -16,9 +16,10 @@ db/cortex.db-shm
 *credentials*
 *password*
 
-# Logs
+# Logs / agent local notes
 *.log
 logs/
+.learnings/
 
 # OS
 .DS_Store

@@ -27,6 +27,8 @@ CORTEX is not trying to be a generic SaaS task app. It is infrastructure for AI 
 - SQLite-backed task ledger.
 - CLI for task creation, status, blockers, retries, input requests, dependencies, subtasks, recurring metadata, and due dates.
 - JSON output for automation-safe workflows.
+- Canonical JSONL import/export for portable task data.
+- Operator backup/restore and retention/compaction commands.
 - Deterministic migrations tracked in `schema_migrations`.
 - Minimal `cortexd` HTTP API with scoped bearer-token auth.
 - Stable response envelopes for UI/plugin consumers.
@@ -106,6 +108,10 @@ node cortex.js add "Ship feature" --tag backend --tag api --depends 12 --due 202
 node cortex.js list --project cortex --tag backend
 node cortex.js list --status blocked
 node cortex.js get 42
+node cortex.js export --format jsonl --out ./exports/cortex-tasks.jsonl
+node cortex.js import --file ./exports/cortex-tasks.jsonl
+node cortex.js backup --out ./backups/cortex-$(date -u +%Y%m%dT%H%M%SZ).sqlite
+node cortex.js retention report --json
 ```
 
 Automation-safe JSON:
@@ -118,7 +124,7 @@ node cortex.js status --project cortex --json
 node cortex.js stats --json
 ```
 
-Critical commands with JSON output include `add`, `list`, `get`, `update`, `block`, `fail`, `input`, `done`, `cancel`, `status`, `stats`, and `overdue`.
+Critical commands with JSON output include `add`, `list`, `get`, `update`, `block`, `fail`, `input`, `done`, `cancel`, `status`, `stats`, `overdue`, `backup`, `restore`, `import`, and `retention`.
 
 ## Daemon API
 
@@ -211,6 +217,7 @@ CORTEX v2 is heading toward:
 - append-only task event ledger;
 - explicit lifecycle transition validation;
 - JSONL import/export and backup/restore;
+- retention reporting and safe compaction;
 - native OpenClaw plugin;
 - Mission Control UI contracts;
 - optional multi-VPS sync.

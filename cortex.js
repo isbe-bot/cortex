@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const tasks = require('./lib/tasks');
 const display = require('./lib/display');
+const ops = require('./lib/operations');
 
 function die(msg) {
   console.error(msg);
@@ -132,6 +133,15 @@ function parseDays(input) {
   const match = raw.match(/^(\d+)(d|days)?$/);
   if (!match) return null;
   return Number(match[1]);
+}
+
+function parseNonNegativeInt(value, fieldName) {
+  if (value === undefined || value === null) return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0) {
+    die(`Invalid ${fieldName}: expected a non-negative integer`);
+  }
+  return n;
 }
 
 function cmdAdd(args, opts) {
@@ -750,6 +760,20 @@ function cmdExport(args, opts) {
   const filters = buildFilters(opts);
   const rows = tasks.listTasks(filters);
 
+  if (format === 'jsonl') {
+    const result = ops.exportJsonl({ rows, outputPath: opts.out || null });
+    if (opts.out && opts.json) {
+      printJSON({
+        format: 'jsonl',
+        output: result.outputPath,
+        tasks: result.tasks,
+        dependencies: result.dependencies,
+        logs: result.logs,
+      });
+    }
+    return;
+  }
+
   if (format === 'json') {
     console.log(JSON.stringify(rows, null, 2));
     return;
@@ -784,7 +808,100 @@ function cmdExport(args, opts) {
     return;
   }
 
-  die('Unsupported format. Use --format json|csv|md');
+  die('Unsupported format. Use --format json|csv|md|jsonl');
+}
+
+async function cmdImport(args, opts) {
+  const filePath = opts.file || args[0];
+  if (!filePath) die('Usage: import --file <path-to-export.jsonl>');
+  const result = await ops.importJsonl({ filePath });
+  if (opts.json) {
+    printJSON(result);
+    return;
+  }
+  console.log(`Imported ${result.importedTasks}/${result.sourceTasks} task(s), ${result.importedDependencies} dependency link(s), ${result.importedLogs} log row(s)`);
+}
+
+async function cmdBackup(args, opts) {
+  const outputPath = opts.out || args[0];
+  if (!outputPath) die('Usage: backup --out <path-to-backup.sqlite>');
+  const result = await ops.backupDatabase({ outputPath });
+  if (opts.json) {
+    printJSON(result);
+    return;
+  }
+  console.log(`Backup created: ${result.outputPath}`);
+}
+
+async function cmdRestore(args, opts) {
+  const filePath = opts.file || args[0];
+  if (!filePath) die('Usage: restore --file <path-to-backup.sqlite> --yes');
+  if (!opts.yes) die('Restore is destructive. Re-run with --yes to confirm.');
+  const result = await ops.restoreDatabase({ inputPath: filePath });
+  if (opts.json) {
+    printJSON(result);
+    return;
+  }
+  console.log(`Restored database from ${result.sourcePath}`);
+  console.log(`Safety backup saved at ${result.safetyBackupPath}`);
+}
+
+function cmdRetention(args = [], opts = {}) {
+  const mode = String(args[0] || 'report').toLowerCase();
+  const retention = {
+    doneArchiveDays: parseNonNegativeInt(opts.doneDays, '--doneDays'),
+    cancelledArchiveDays: parseNonNegativeInt(opts.cancelledDays, '--cancelledDays'),
+    eventRetentionDays: parseNonNegativeInt(opts.eventDays, '--eventDays'),
+  };
+
+  if (mode === 'report') {
+    const report = ops.retentionReport(retention);
+    if (opts.json) {
+      printJSON(report);
+      return;
+    }
+    console.log('RETENTION REPORT');
+    console.log('================');
+    console.log(`done -> archived candidates:      ${report.candidates.archiveDone}`);
+    console.log(`cancelled -> archived candidates: ${report.candidates.archiveCancelled}`);
+    console.log(`task_log prune candidates:        ${report.candidates.pruneTaskLog}`);
+    console.log('');
+    console.log(`database bytes:    ${report.storage.fileBytes}`);
+    console.log(`reclaimable bytes: ${report.storage.reclaimableBytes}`);
+    return;
+  }
+
+  if (mode === 'apply') {
+    if (!opts.yes) die('Retention apply mutates data. Re-run with --yes to confirm.');
+    const result = ops.applyRetention({ ...retention, compact: Boolean(opts.compact) });
+    if (opts.json) {
+      printJSON(result);
+      return;
+    }
+    console.log('RETENTION APPLIED');
+    console.log('=================');
+    console.log(`done -> archived:      ${result.changes.archiveDone}`);
+    console.log(`cancelled -> archived: ${result.changes.archiveCancelled}`);
+    console.log(`task_log pruned:       ${result.changes.pruneTaskLog}`);
+    if (result.compacted) {
+      console.log('database compacted: yes');
+    }
+    return;
+  }
+
+  die('Usage: retention report|apply [--doneDays N] [--cancelledDays N] [--eventDays N] [--compact] [--yes] [--json]');
+}
+
+function cmdCompact(args = [], opts = {}) {
+  if (!opts.yes) die('Compaction rewrites the database. Re-run with --yes to confirm.');
+  const stats = ops.compactDatabase();
+  if (opts.json) {
+    printJSON(stats);
+    return;
+  }
+  console.log('Database compacted');
+  console.log(`bytes: ${stats.fileBytes}`);
+  console.log(`reclaimable: ${stats.reclaimableBytes}`);
 }
 
 function cmdMove(args, opts) {
@@ -829,7 +946,13 @@ function cmdHelp() {
     '  log <id> "message"',
     '  stats [--json]',
     '  archive --before <days>d',
-    '  export --format json|csv|md [--status ...] [--assign name] [--project name] [--priority level] [--tag name]',
+    '  export --format json|csv|md|jsonl [--out path] [--status ...] [--assign name] [--project name] [--priority level] [--tag name] [--json]',
+    '  import --file <tasks.jsonl> [--json]',
+    '  backup --out <backup.sqlite> [--json]',
+    '  restore --file <backup.sqlite> --yes [--json]',
+    '  retention report [--doneDays N] [--cancelledDays N] [--eventDays N] [--json]',
+    '  retention apply [--doneDays N] [--cancelledDays N] [--eventDays N] [--compact] --yes [--json]',
+    '  compact --yes [--json]',
     '  move <id> --assign name',
     '  overdue [--json]',
     '  status [--project name] [--json]',
@@ -848,7 +971,7 @@ function cmdHelp() {
   console.log(lines.join('\n'));
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
   const { args, opts } = parseArgs(argv.slice(1));
@@ -879,6 +1002,11 @@ function main() {
       case 'stats': return cmdStats(args, opts);
       case 'archive': return cmdArchive(args, opts);
       case 'export': return cmdExport(args, opts);
+      case 'import': return await cmdImport(args, opts);
+      case 'backup': return await cmdBackup(args, opts);
+      case 'restore': return await cmdRestore(args, opts);
+      case 'retention': return cmdRetention(args, opts);
+      case 'compact': return cmdCompact(args, opts);
       case 'move': return cmdMove(args, opts);
       case 'overdue': return cmdOverdue(args, opts);
       case 'status': return cmdStatus(args, opts);
@@ -896,7 +1024,9 @@ function main() {
 }
 
 if (require.main === module) {
-  main();
+  main().catch((err) => {
+    die(err.message);
+  });
 }
 
 module.exports = {

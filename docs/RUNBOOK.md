@@ -62,24 +62,23 @@ node cortex.js done 1 --notes "Validated with npm test"
 
 ## Backup
 
-Current CORTEX stores local state in `db/cortex.db`.
-
 ```bash
 mkdir -p ~/backups/cortex
-sqlite3 db/cortex.db ".backup '$HOME/backups/cortex/cortex-$(date -u +%Y%m%dT%H%M%SZ).sqlite'"
+node cortex.js backup --out "$HOME/backups/cortex/cortex-$(date -u +%Y%m%dT%H%M%SZ).sqlite"
 ```
 
-Future `cortexctl backup` should wrap this safely.
+This uses SQLite online backup API and is safe with WAL mode.
 
 ## Restore
 
 Stop any running users of the DB first.
 
 ```bash
-cp db/cortex.db db/cortex.db.pre-restore.$(date -u +%Y%m%dT%H%M%SZ)
-cp ~/backups/cortex/<backup>.sqlite db/cortex.db
+node cortex.js restore --file ~/backups/cortex/<backup>.sqlite --yes
 node cortex.js status
 ```
+
+`restore` creates an automatic `*.pre-restore.*.sqlite` safety backup before replacing the active DB.
 
 ## Migrations
 
@@ -88,6 +87,35 @@ node cortex.js status
 ```bash
 node db/init.js
 sqlite3 db/cortex.db 'select version, filename, applied_at from schema_migrations order by version;'
+```
+
+## JSONL import/export
+
+```bash
+node cortex.js export --format jsonl --out ./exports/cortex-tasks.jsonl
+node cortex.js import --file ./exports/cortex-tasks.jsonl
+```
+
+JSONL exports include task rows, dependency links, and task log rows.
+
+## Retention and compaction
+
+Dry-run report first:
+
+```bash
+node cortex.js retention report --json
+```
+
+Apply retention and optional compaction:
+
+```bash
+node cortex.js retention apply --doneDays 90 --cancelledDays 30 --eventDays 365 --compact --yes
+```
+
+Standalone compaction:
+
+```bash
+node cortex.js compact --yes
 ```
 
 ## Automation / JSON output
