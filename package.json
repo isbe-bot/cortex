@@ -5,7 +5,8 @@
   "main": "cortex.js",
   "scripts": {
     "init": "node db/init.js",
-    "seed": "node cortex.js seed"
+    "seed": "node cortex.js seed",
+    "test": "node --test tests/seed-guard.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^9.0.0"

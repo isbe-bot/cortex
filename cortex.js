@@ -26,7 +26,16 @@ function parseArgs(argv) {
       const key = a.slice(2);
       const next = argv[i + 1];
       if (next && !next.startsWith('--')) {
-        opts[key] = next;
+        if (opts[key] !== undefined) {
+          const existing = opts[key];
+          if (Array.isArray(existing)) {
+            existing.push(next);
+          } else {
+            opts[key] = [existing, next];
+          }
+        } else {
+          opts[key] = next;
+        }
         i++;
       } else {
         opts[key] = true;
@@ -45,6 +54,7 @@ function formatList(rows) {
     assignee: r.assignee || '-',
     status: r.status,
     progress: (typeof r.progress === 'string') ? r.progress : `${r.progress || 0}%`,
+    due: r.due_at ? String(r.due_at).slice(0, 10) : '',
     priority: r.priority || 'normal',
   }));
 
@@ -54,6 +64,7 @@ function formatList(rows) {
     { key: 'assignee', label: 'ASSIGNEE', width: 10 },
     { key: 'status', label: 'STATUS', width: 12 },
     { key: 'progress', label: 'PROGRESS', width: 9 },
+    { key: 'due', label: 'DUE', width: 10 },
     { key: 'priority', label: 'PRIORITY', width: 8 },
   ];
 
@@ -80,9 +91,47 @@ function buildTree(rows) {
   return ordered;
 }
 
+function normalizeTags(input) {
+  if (!input) return [];
+  const values = Array.isArray(input) ? input : [input];
+  const tags = [];
+  for (const val of values) {
+    if (!val) continue;
+    const parts = String(val).split(',').map(t => t.trim()).filter(Boolean);
+    tags.push(...parts);
+  }
+  return tags;
+}
+
+function normalizeIds(input) {
+  if (!input) return [];
+  const values = Array.isArray(input) ? input : [input];
+  const ids = [];
+  for (const val of values) {
+    if (!val) continue;
+    const parts = String(val).split(',').map(t => t.trim()).filter(Boolean);
+    for (const part of parts) {
+      const num = Number(part);
+      if (Number.isInteger(num) && num > 0) ids.push(num);
+    }
+  }
+  return ids;
+}
+
+function parseDays(input) {
+  if (!input) return null;
+  const raw = String(input).trim().toLowerCase();
+  const match = raw.match(/^(\d+)(d|days)?$/);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
 function cmdAdd(args, opts) {
   const title = args[0];
   if (!title) die('Title required');
+
+  const tags = normalizeTags(opts.tag);
+  const deps = normalizeIds(opts.depends);
 
   const id = tasks.createTask({
     title,
@@ -92,18 +141,32 @@ function cmdAdd(args, opts) {
     priority: opts.priority,
     parent_task_id: opts.parent ? Number(opts.parent) : null,
     step: opts.step,
+    tags: tags.length ? tags.join(',') : null,
+    recur_interval: opts.recur || null,
+    due_at: opts.due || null,
   });
+
+  for (const depId of deps) {
+    tasks.addDependency(id, depId);
+  }
+
   console.log(`Created task #${id}`);
 }
 
-function cmdList(args, opts) {
-  const filters = {
+function buildFilters(opts) {
+  const tagFilter = normalizeTags(opts.tag);
+  return {
     status: opts.status,
     assignee: opts.assign,
     project: opts.project,
     priority: opts.priority,
+    tag: tagFilter[0],
     excludeDoneCancelled: !opts.status,
   };
+}
+
+function cmdList(args, opts) {
+  const filters = buildFilters(opts);
 
   const rows = tasks.listTasks(filters);
   if (opts.tree) {
@@ -114,6 +177,7 @@ function cmdList(args, opts) {
       assignee: row.assignee || '-',
       status: row.status,
       progress: `${row.progress || 0}%`,
+      due: row.due_at ? String(row.due_at).slice(0, 10) : '',
       priority: row.priority || 'normal',
     }));
     console.log(formatList(data));
@@ -137,6 +201,9 @@ function cmdGet(args) {
   console.log(`Assignee: ${task.assignee || ''}`);
   console.log(`Project: ${task.project || ''}`);
   console.log(`Priority: ${task.priority || ''}`);
+  console.log(`Tags: ${task.tags || ''}`);
+  console.log(`Recur: ${task.recur_interval || ''}`);
+  console.log(`Due At: ${task.due_at || ''}`);
   console.log(`Session Key: ${task.session_key || ''}`);
   console.log(`Blocked Reason: ${task.blocked_reason || ''}`);
   console.log(`Needs Input: ${task.needs_input || 0}`);
@@ -145,13 +212,35 @@ function cmdGet(args) {
   console.log(`Parent Task ID: ${task.parent_task_id || ''}`);
   console.log(`Created At: ${task.created_at}`);
   console.log(`Updated At: ${task.updated_at}`);
+  console.log(`Started At: ${task.started_at || ''}`);
   console.log(`Resolved At: ${task.resolved_at || ''}`);
+
+  if (task.started_at && task.resolved_at) {
+    const cycleMs = new Date(task.resolved_at) - new Date(task.started_at);
+    console.log(`Cycle Time: ${formatDuration(cycleMs)}`);
+  }
 
   const subs = tasks.getSubtasks(task.id);
   if (subs.length) {
     console.log('\nSubtasks:');
     for (const s of subs) {
       console.log(`  #${s.id} ${s.title} [${s.status}] ${s.progress || 0}%`);
+    }
+  }
+
+  const deps = tasks.listDependencies(task.id);
+  if (deps.length) {
+    console.log('\nDependencies:');
+    for (const d of deps) {
+      console.log(`  #${d.depends_on_id} ${d.title} [${d.status}]`);
+    }
+  }
+
+  const logs = tasks.listTaskLog(task.id, 5);
+  if (logs.length) {
+    console.log('\nRecent Log:');
+    for (const entry of logs) {
+      console.log(`  ${entry.timestamp} [${entry.agent || '-'}] ${entry.action || ''} ${entry.message || ''}`.trim());
     }
   }
 }
@@ -170,11 +259,30 @@ function cmdUpdate(args, opts) {
   if (opts.priority) fields.priority = opts.priority;
   if (opts.parent) fields.parent_task_id = Number(opts.parent);
   if (opts.title) fields.title = opts.title;
+  if (opts.recur) fields.recur_interval = opts.recur;
+  if (opts.due) fields.due_at = opts.due;
+
+  const newTags = normalizeTags(opts.tag);
+  if (newTags.length) {
+    const task = tasks.getTask(id);
+    if (!task) die(`Task #${id} not found`);
+    const existing = normalizeTags(task.tags || '');
+    const combined = existing.concat(newTags);
+    fields.tags = combined.join(',');
+  }
 
   let changed = 0;
   if (Object.keys(fields).length) {
     changed += tasks.updateTask(id, fields);
   }
+
+  const deps = normalizeIds(opts.depends);
+  if (deps.length) {
+    for (const depId of deps) {
+      changed += tasks.addDependency(id, depId);
+    }
+  }
+
   if (opts.notes) {
     changed += tasks.appendDescription(id, opts.notes);
   }
@@ -236,6 +344,23 @@ function cmdDone(args, opts) {
   if (opts.notes) {
     tasks.appendDescription(id, opts.notes);
   }
+
+  const task = tasks.getTask(id);
+  if (task && task.recur_interval) {
+    tasks.createTask({
+      title: task.title,
+      description: task.description || null,
+      assignee: task.assignee || null,
+      project: task.project || null,
+      priority: task.priority || 'normal',
+      tags: task.tags || null,
+      parent_task_id: task.parent_task_id || null,
+      recur_interval: task.recur_interval,
+      status: 'todo',
+      progress: 0,
+    });
+  }
+
   console.log(`Task #${id} marked done`);
 }
 
@@ -309,7 +434,19 @@ function formatSubtasks(rows) {
   return lines.join('\n');
 }
 
-function cmdBrief(args) {
+function formatDuration(ms) {
+  if (ms < 0 || !Number.isFinite(ms)) return '';
+  const seconds = Math.floor(ms / 1000);
+  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(mins / 60);
+  const days = Math.floor(hrs / 24);
+  if (days > 0) return `${days}d ${hrs % 24}h`;
+  if (hrs > 0) return `${hrs}h ${mins % 60}m`;
+  if (mins > 0) return `${mins}m ${seconds % 60}s`;
+  return `${seconds}s`;
+}
+
+function cmdBrief(args, opts) {
   const id = Number(args[0]);
   if (!id) die('Task id required');
   const task = tasks.getTask(id);
@@ -344,6 +481,31 @@ function cmdBrief(args) {
   console.log('');
   console.log('Notes/History:');
   console.log(notes ? notes : '(none)');
+
+  // Standards injection
+  try {
+    const { matchStandards, buildInjection } = require(path.join(process.env.HOME, 'vault', 'standards', 'standards-inject.js'));
+    const context = `${task.title} ${description || ''} ${task.project || ''}`;
+    const matches = matchStandards(context);
+    if (matches.length > 0) {
+      console.log('');
+      console.log('Relevant Standards:');
+      for (const m of matches) {
+        console.log(`  ~/vault/standards/${m.name}.md — ${m.entry.description}`);
+      }
+      if (opts && opts.inject) {
+        console.log('');
+        console.log('========== INJECTED STANDARDS ==========');
+        console.log(buildInjection(matches));
+        console.log('========== END STANDARDS ==========');
+      } else {
+        console.log('');
+        console.log('(Use --inject to include full standards content)');
+      }
+    }
+  } catch (e) {
+    // Standards injection is optional — don't break brief if it fails
+  }
 }
 
 function cmdNext(args, opts) {
@@ -352,7 +514,8 @@ function cmdNext(args, opts) {
     assignee: opts.assign,
     project: opts.project,
   };
-  const rows = tasks.listTasks(filters);
+  let rows = tasks.listTasks(filters);
+  rows = rows.filter(r => tasks.listUnmetDependencies(r.id).length === 0);
   if (rows.length === 0) {
     if (opts.assign) {
       console.log(`No todo tasks found for ${opts.assign}.`);
@@ -446,6 +609,191 @@ function cmdSeed() {
   console.log('Seeded CORTEX tasks');
 }
 
+function cmdAsk(args) {
+  const query = args.join(' ').trim();
+  if (!query) die('Usage: ask "question"');
+
+  const q = query.toLowerCase();
+  const agents = ['isbe', 'carmack', 'picasso', 'chief', 'godfather'];
+  const statusRules = [
+    { status: 'in-progress', terms: ['in progress', 'in-progress', 'working on', 'working', 'doing'] },
+    { status: 'todo', terms: ['todo', 'to do', 'backlog'] },
+    { status: 'blocked', terms: ['blocked', 'stuck'] },
+    { status: 'failed', terms: ['failed', 'error'] },
+    { status: 'needs-input', terms: ['needs input', 'needs-input', 'waiting on'] },
+    { status: 'done', terms: ['done', 'completed', 'finished'] },
+    { status: 'cancelled', terms: ['cancelled', 'canceled'] },
+  ];
+
+  let assignee = agents.find(a => q.includes(a)) || null;
+  let status = null;
+  for (const rule of statusRules) {
+    if (rule.terms.some(t => q.includes(t))) {
+      status = rule.status;
+      break;
+    }
+  }
+
+  let project = null;
+  const projectMatch = q.match(/project\s+([a-z0-9_-]+)/i);
+  if (projectMatch) {
+    project = projectMatch[1];
+  } else {
+    const projects = [...new Set(tasks.listTasks({}).map(t => t.project).filter(Boolean))];
+    project = projects.find(p => q.includes(p.toLowerCase())) || null;
+  }
+
+  if (q.includes('status') && !assignee && !status) {
+    return cmdStatus([], { project });
+  }
+
+  const filters = {
+    status,
+    assignee,
+    project,
+    excludeDoneCancelled: !status,
+  };
+
+  const rows = tasks.listTasks(filters);
+  if (!rows.length) {
+    console.log('No matching tasks found.');
+    return;
+  }
+  console.log(formatList(rows));
+}
+
+function cmdLog(args) {
+  const id = Number(args[0]);
+  const message = args[1];
+  if (!id || !message) die('Usage: log <id> "message"');
+  tasks.logTaskAction(id, 'note', message);
+  console.log(`Logged entry for task #${id}`);
+}
+
+function cmdStats() {
+  const stats = tasks.getStats();
+  console.log('CORTEX STATS');
+  console.log('============');
+  console.log(`Completed this week: ${stats.completedThisWeek}`);
+  console.log(`Avg cycle time: ${formatDuration(stats.avgCycleSeconds * 1000)}`);
+  console.log('');
+  console.log('Tasks per agent:');
+  for (const row of stats.perAgent) {
+    console.log(`  ${row.assignee}: ${row.count}`);
+  }
+  console.log('');
+  console.log('Tasks per project:');
+  for (const row of stats.perProject) {
+    console.log(`  ${row.project}: ${row.count}`);
+  }
+}
+
+function cmdArchive(args, opts) {
+  const days = parseDays(opts.before);
+  if (!days) die('Usage: archive --before <days>d');
+  const changes = tasks.archiveTasks(days);
+  console.log(`Archived ${changes} task(s)`);
+}
+
+function cmdExport(args, opts) {
+  const format = (opts.format || 'json').toLowerCase();
+  const filters = buildFilters(opts);
+  const rows = tasks.listTasks(filters);
+
+  if (format === 'json') {
+    console.log(JSON.stringify(rows, null, 2));
+    return;
+  }
+
+  if (format === 'csv') {
+    const columns = [
+      'id','title','description','status','step','progress','assignee','project','priority','tags','recur_interval',
+      'session_key','blocked_reason','needs_input','input_question','retry_count','parent_task_id','created_at','updated_at','started_at','resolved_at','due_at'
+    ];
+    const esc = (val) => {
+      const s = val === null || val === undefined ? '' : String(val);
+      if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    console.log(columns.join(','));
+    for (const row of rows) {
+      console.log(columns.map(c => esc(row[c])).join(','));
+    }
+    return;
+  }
+
+  if (format === 'md' || format === 'markdown') {
+    const headers = ['ID', 'Title', 'Status', 'Assignee', 'Project', 'Priority'];
+    console.log(`| ${headers.join(' | ')} |`);
+    console.log(`| ${headers.map(() => '---').join(' | ')} |`);
+    for (const row of rows) {
+      console.log(`| ${row.id} | ${row.title} | ${row.status} | ${row.assignee || ''} | ${row.project || ''} | ${row.priority || ''} |`);
+    }
+    return;
+  }
+
+  die('Unsupported format. Use --format json|csv|md');
+}
+
+function cmdMove(args, opts) {
+  const id = Number(args[0]);
+  const assignee = opts.assign;
+  if (!id || !assignee) die('Usage: move <id> --assign name');
+  const task = tasks.getTask(id);
+  if (!task) die(`Task #${id} not found`);
+  tasks.updateTask(id, { assignee });
+  tasks.logTaskAction(id, 'move', `${task.assignee || '(unassigned)'} -> ${assignee}`);
+  console.log(`Task #${id} reassigned to ${assignee}`);
+}
+
+function cmdOverdue() {
+  const rows = tasks.listOverdue();
+  if (!rows.length) {
+    console.log('No overdue tasks.');
+    return;
+  }
+  console.log(formatList(rows));
+}
+
+function cmdHelp() {
+  const lines = [
+    'CORTEX CLI — commands:',
+    '',
+    '  help                               Show this help',
+    '  ask "question"                      Natural language query',
+    '  add "title" [--desc "..."] [--assign name] [--project name] [--priority high|normal|low|urgent] [--tag name] [--recur daily|weekly|monthly] [--due YYYY-MM-DD] [--depends <id>] [--parent <id>] [--step "..."]',
+    '  list [--status todo|in-progress|done|blocked|failed|cancelled|needs-input] [--assign name] [--project name] [--priority level] [--tag name] [--tree]',
+    '  get <id>',
+    '  update <id> [--status ...] [--progress <0-100>] [--step "..."] [--assign name] [--project name] [--priority level] [--tag name] [--recur daily|weekly|monthly] [--due YYYY-MM-DD] [--depends <id>] [--parent <id>] [--title "..."] [--notes "..."]',
+    '  block <id> "reason"',
+    '  fail <id> "reason" [--retry]',
+    '  input <id> "question"',
+    '  done <id> [--notes "..."]',
+    '  cancel <id>',
+    '  log <id> "message"',
+    '  stats',
+    '  archive --before <days>d',
+    '  export --format json|csv|md [--status ...] [--assign name] [--project name] [--priority level] [--tag name]',
+    '  move <id> --assign name',
+    '  overdue',
+    '  status [--project name]',
+    '  orphans',
+    '  brief <id> [--inject]',
+    '  next [--assign name] [--project name]',
+    '  resume <id>',
+    '  seed',
+    '',
+    'Examples:',
+    '  cortex add "Ship feature" --assign carmack --project cortex --priority high',
+    '  cortex list --status in-progress --assign carmack',
+    '  cortex update 41 --status in-progress --progress 30 --step "phase-1"',
+    '  cortex done 41 --notes "Shipped"',
+  ];
+  console.log(lines.join('\n'));
+}
+
 function main() {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
@@ -453,12 +801,17 @@ function main() {
 
   if (!cmd) die('Command required');
 
-  if (cmd !== 'init') {
+  if (cmd !== 'init' && cmd !== 'help' && cmd !== '--help' && !opts.help) {
     ensureDb();
   }
 
   try {
+    if (cmd === '--help' || opts.help) {
+      return cmdHelp();
+    }
     switch (cmd) {
+      case 'help': return cmdHelp();
+      case 'ask': return cmdAsk(args, opts);
       case 'add': return cmdAdd(args, opts);
       case 'list': return cmdList(args, opts);
       case 'get': return cmdGet(args);
@@ -468,6 +821,12 @@ function main() {
       case 'input': return cmdInput(args);
       case 'done': return cmdDone(args, opts);
       case 'cancel': return cmdCancel(args);
+      case 'log': return cmdLog(args);
+      case 'stats': return cmdStats();
+      case 'archive': return cmdArchive(args, opts);
+      case 'export': return cmdExport(args, opts);
+      case 'move': return cmdMove(args, opts);
+      case 'overdue': return cmdOverdue();
       case 'status': return cmdStatus(args, opts);
       case 'orphans': return cmdOrphans();
       case 'brief': return cmdBrief(args, opts);
@@ -482,4 +841,10 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  cmdSeed,
+};

@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   project         TEXT,
   priority        TEXT DEFAULT 'normal',
   -- priority values: low | normal | high | urgent
+  tags            TEXT,
+  recur_interval  TEXT,
   session_key     TEXT,
   blocked_reason  TEXT,
   needs_input     INTEGER DEFAULT 0,
@@ -19,7 +21,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   parent_task_id  INTEGER REFERENCES tasks(id),
   created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-  resolved_at     DATETIME
+  started_at      DATETIME,
+  resolved_at     DATETIME,
+  due_at          DATETIME
 );
 
 CREATE INDEX IF NOT EXISTS idx_status ON tasks(status);
@@ -34,3 +38,23 @@ CREATE TRIGGER IF NOT EXISTS tasks_updated_at
   BEGIN
     UPDATE tasks SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
   END;
+
+CREATE TABLE IF NOT EXISTS task_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id    INTEGER NOT NULL REFERENCES tasks(id),
+  timestamp  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  agent      TEXT,
+  action     TEXT,
+  message    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_log_task_id ON task_log(task_id);
+
+CREATE TABLE IF NOT EXISTS task_dependencies (
+  task_id        INTEGER NOT NULL REFERENCES tasks(id),
+  depends_on_id  INTEGER NOT NULL REFERENCES tasks(id),
+  PRIMARY KEY (task_id, depends_on_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_deps_task ON task_dependencies(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_deps_depends ON task_dependencies(depends_on_id);
