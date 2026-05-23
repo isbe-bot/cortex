@@ -5,20 +5,17 @@ const path = require('path');
 const tasks = require('./lib/tasks');
 const display = require('./lib/display');
 const ops = require('./lib/operations');
+const { resolveDbPath } = require('./lib/config');
 
 function die(msg) {
   console.error(msg);
   process.exit(1);
 }
 
-function resolveDbPath() {
-  return process.env.CORTEX_DB_PATH || path.join(__dirname, 'db', 'cortex.db');
-}
-
 function ensureDb() {
-  const dbPath = resolveDbPath();
+  const dbPath = resolveDbPath(process.env);
   if (!fs.existsSync(dbPath)) {
-    die('Database not initialized. Run: node db/init.js');
+    die('Database not initialized. Run: cortex init');
   }
 }
 
@@ -613,6 +610,11 @@ function cmdResume(args) {
   console.log(`  Suggestion:     ${suggestion}`);
 }
 
+function cmdInit() {
+  const initDb = require('./db/init');
+  initDb.init();
+}
+
 function cmdSeed() {
   // Guard: don't double-seed
   const existing = tasks.listTasks({});
@@ -922,6 +924,7 @@ function cmdHelp() {
     'CORTEX CLI — commands:',
     '',
     '  help                               Show this help',
+    '  init                               Initialize or migrate database',
     '  ask "question"                      Natural language query',
     '  add "title" [--desc "..."] [--assign name] [--project name] [--priority high|normal|low|urgent] [--tag name] [--recur daily|weekly|monthly] [--due YYYY-MM-DD] [--depends <id>] [--parent <id>] [--step "..."] [--json]',
     '  list [--status todo|in-progress|done|blocked|failed|cancelled|needs-input] [--assign name] [--project name] [--priority level] [--tag name] [--tree] [--json]',
@@ -977,6 +980,7 @@ async function main() {
     }
     switch (cmd) {
       case 'help': return cmdHelp();
+      case 'init': return cmdInit();
       case 'ask': return cmdAsk(args, opts);
       case 'add': return cmdAdd(args, opts);
       case 'list': return cmdList(args, opts);

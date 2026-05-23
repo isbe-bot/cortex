@@ -1,45 +1,35 @@
 #!/usr/bin/env node
 
 const fs = require('node:fs');
-const path = require('node:path');
 const { createApiServer } = require('./lib/api/server');
 const { buildAuthFromEnv } = require('./lib/api/auth');
+const { resolveDbPath, resolveApiConfig, mergeEnv, loadFileConfig } = require('./lib/config');
 
 function die(msg) {
   console.error(msg);
   process.exit(1);
 }
 
-function resolveDbPath() {
-  return process.env.CORTEX_DB_PATH || path.join(__dirname, 'db', 'cortex.db');
-}
-
 function ensureDb() {
-  const dbPath = resolveDbPath();
+  const dbPath = resolveDbPath(process.env);
   if (!fs.existsSync(dbPath)) {
     die(`Database not initialized at ${dbPath}. Run: node db/init.js`);
   }
   return dbPath;
 }
 
-function parsePort(value) {
-  const port = Number(value || 8777);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    die('Invalid CORTEX_API_PORT (must be 1-65535)');
-  }
-  return port;
-}
-
-function parseHost(value) {
-  const host = value || '127.0.0.1';
-  return host;
-}
-
 function main() {
   const dbPath = ensureDb();
-  const auth = buildAuthFromEnv(process.env);
-  const host = parseHost(process.env.CORTEX_API_HOST);
-  const port = parsePort(process.env.CORTEX_API_PORT);
+  const { values: mergedEnv } = mergeEnv(process.env);
+  const apiConfig = resolveApiConfig(process.env);
+  const auth = buildAuthFromEnv({
+    ...mergedEnv,
+    CORTEX_API_AUTH_REQUIRED: apiConfig.requireAuth ? '1' : '0',
+  });
+
+  const { path: configPath } = loadFileConfig(process.env);
+  const host = apiConfig.host;
+  const port = apiConfig.port;
 
   const server = createApiServer({ auth, dbPath });
 
@@ -47,6 +37,7 @@ function main() {
     console.log(`cortexd listening on http://${host}:${port}`);
     console.log(`db: ${dbPath}`);
     console.log(`auth required: ${auth.requireAuth ? 'yes' : 'no'}`);
+    if (configPath) console.log(`config: ${configPath}`);
   });
 
   process.on('SIGINT', () => {

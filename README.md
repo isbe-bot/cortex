@@ -78,6 +78,33 @@ node cortex.js list --project cortex
 node cortex.js status
 ```
 
+## Installation & Deployment
+
+### systemd (recommended for VPS)
+
+```bash
+sudo ./scripts/install.sh
+sudo systemctl enable --now cortexd
+journalctl -u cortexd -f
+```
+
+Edit `/etc/cortex/cortex.env` before starting.
+
+### Docker
+
+```bash
+cp configs/cortex.env.example configs/cortex.env
+# edit configs/cortex.env
+docker compose up -d
+```
+
+### Manual
+
+```bash
+node db/init.js
+CORTEX_CONFIG=configs/cortex.env node cortexd.js
+```
+
 Use a custom database path:
 
 ```bash

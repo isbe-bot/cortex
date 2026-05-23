@@ -1,7 +1,7 @@
-const path = require('path');
 const Database = require('better-sqlite3');
+const { resolveDbPath } = require('../lib/config');
 
-const dbPath = process.env.CORTEX_DB_PATH || path.join(__dirname, 'cortex.db');
+const dbPath = resolveDbPath(process.env);
 const db = new Database(dbPath);
 
 // Pragmas for reasonable defaults

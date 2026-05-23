@@ -1,0 +1,28 @@
+[Unit]
+Description=CORTEX Daemon (task operations core)
+Documentation=https://github.com/isbe-bot/cortex
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cortex
+Group=cortex
+Environment=CORTEX_CONFIG=/etc/cortex/cortex.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/cortex/cortexd.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cortexd
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cortex /var/log/cortex
+
+[Install]
+WantedBy=multi-user.target

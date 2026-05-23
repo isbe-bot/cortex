@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  cortex:
+    build: .
+    container_name: cortex
+    restart: unless-stopped
+    ports:
+      - "8777:8777"
+    environment:
+      - CORTEX_CONFIG=/etc/cortex/cortex.env
+      - NODE_ENV=production
+    volumes:
+      - ./configs/cortex.env:/etc/cortex/cortex.env:ro
+      - cortex_data:/var/lib/cortex
+      - cortex_logs:/var/log/cortex
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8777/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  cortex_data:
+  cortex_logs:
