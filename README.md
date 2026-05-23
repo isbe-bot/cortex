@@ -25,6 +25,9 @@ CORTEX is not trying to be a generic SaaS task app. It is infrastructure for AI 
 ## Features
 
 - SQLite-backed task ledger.
+- Stable task identity (`task_uid`, `instance_id`, `client_slug`, `project_slug`) for local authority and portability.
+- Append-only `task_events` audit ledger for lifecycle, retention, import, and restore traces.
+- Lifecycle transition validation with explicit command-level event emission (`create/update/block/fail/input/done/cancel/archive/import/restore/retention`).
 - CLI for task creation, status, blockers, retries, input requests, dependencies, subtasks, recurring metadata, and due dates.
 - JSON output for automation-safe workflows.
 - Canonical JSONL import/export for portable task data.
@@ -211,13 +214,9 @@ node cortex.js status --json
 
 ## Roadmap
 
-CORTEX v2 is heading toward:
+CORTEX v2 next steps:
 
 - `cortexd` daemon and `cortexctl` CLI split;
-- append-only task event ledger;
-- explicit lifecycle transition validation;
-- JSONL import/export and backup/restore;
-- retention reporting and safe compaction;
 - native OpenClaw plugin;
 - Mission Control UI contracts;
 - optional multi-VPS sync.

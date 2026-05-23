@@ -35,10 +35,14 @@ test('db/init initializes fresh DB and records migration checksums', () => {
   const db = new Database(dbPath);
   try {
     const count = db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count;
-    assert.ok(count >= 6);
+    assert.ok(count >= 7);
     const columns = db.prepare('PRAGMA table_info(tasks)').all().map(row => row.name);
     assert.ok(columns.includes('tags'));
     assert.ok(columns.includes('due_at'));
+    assert.ok(columns.includes('task_uid'));
+    assert.ok(columns.includes('instance_id'));
+    assert.ok(columns.includes('client_slug'));
+    assert.ok(columns.includes('project_slug'));
   } finally {
     db.close();
   }
@@ -77,7 +81,7 @@ test('applyMigrations upgrades an older schema idempotently', () => {
     assert.ok(columns.includes('tags'));
     assert.ok(columns.includes('started_at'));
     assert.ok(columns.includes('due_at'));
-    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count, 6);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count, 7);
   } finally {
     db.close();
   }

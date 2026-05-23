@@ -96,7 +96,7 @@ node cortex.js export --format jsonl --out ./exports/cortex-tasks.jsonl
 node cortex.js import --file ./exports/cortex-tasks.jsonl
 ```
 
-JSONL exports include task rows, dependency links, and task log rows.
+JSONL exports include task rows, dependency links, task log rows, and task event rows.
 
 ## Retention and compaction
 
@@ -110,6 +110,8 @@ Apply retention and optional compaction:
 
 ```bash
 node cortex.js retention apply --doneDays 90 --cancelledDays 30 --eventDays 365 --compact --yes
+
+# archives old done/cancelled tasks and prunes old task_log + task_events rows
 ```
 
 Standalone compaction:

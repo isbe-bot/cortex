@@ -332,7 +332,7 @@ function cmdBlock(args, opts = {}) {
   const id = Number(args[0]);
   const reason = args[1];
   if (!id || !reason) die('Usage: block <id> "reason"');
-  tasks.setStatus(id, 'blocked', { blocked_reason: reason });
+  tasks.blockTask(id, reason);
   if (opts.json) printJSON({ id, status: 'blocked', task: tasks.getTask(id) });
   else console.log(`Task #${id} blocked`);
 }
@@ -346,15 +346,11 @@ function cmdFail(args, opts) {
     const task = tasks.getTask(id);
     if (!task) die(`Task #${id} not found`);
     const retry = (task.retry_count || 0) + 1;
-    tasks.updateTask(id, {
-      status: 'in-progress',
-      retry_count: retry,
-      blocked_reason: reason,
-    });
+    tasks.failTask(id, reason, { retry: true });
     if (opts.json) printJSON({ id, status: 'in-progress', retry_count: retry, task: tasks.getTask(id) });
     else console.log(`Task #${id} set to in-progress (retry ${retry})`);
   } else {
-    tasks.setStatus(id, 'failed', { blocked_reason: reason });
+    tasks.failTask(id, reason);
     if (opts.json) printJSON({ id, status: 'failed', task: tasks.getTask(id) });
     else console.log(`Task #${id} failed`);
   }
@@ -364,11 +360,7 @@ function cmdInput(args, opts = {}) {
   const id = Number(args[0]);
   const question = args[1];
   if (!id || !question) die('Usage: input <id> "question"');
-  tasks.updateTask(id, {
-    status: 'needs-input',
-    needs_input: 1,
-    input_question: question,
-  });
+  tasks.requestInput(id, question);
   if (opts.json) printJSON({ id, status: 'needs-input', task: tasks.getTask(id) });
   else console.log(`Task #${id} flagged for input`);
 }
@@ -376,10 +368,7 @@ function cmdInput(args, opts = {}) {
 function cmdDone(args, opts) {
   const id = Number(args[0]);
   if (!id) die('Task id required');
-  tasks.updateTask(id, {
-    status: 'done',
-    resolved_at: new Date().toISOString(),
-  });
+  tasks.completeTask(id);
   if (opts.notes) {
     tasks.appendDescription(id, opts.notes);
   }
@@ -407,7 +396,7 @@ function cmdDone(args, opts) {
 function cmdCancel(args, opts = {}) {
   const id = Number(args[0]);
   if (!id) die('Task id required');
-  tasks.setStatus(id, 'cancelled');
+  tasks.cancelTask(id);
   if (opts.json) printJSON({ id, status: 'cancelled', task: tasks.getTask(id) });
   else console.log(`Task #${id} cancelled`);
 }

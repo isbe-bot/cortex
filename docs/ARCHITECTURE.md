@@ -10,13 +10,16 @@ Current implementation is a Node.js CLI + minimal daemon, both backed by SQLite:
 
 - `cortex.js` — CLI command surface
 - `cortexd.js` — HTTP daemon entrypoint
-- `lib/tasks.js` — task data access helpers
+- `lib/tasks.js` — task state/lifecycle operations
+- `lib/lifecycle.js` — identity + transition + event helpers
 - `lib/api/*` — API routes, scoped auth, validation, envelopes
 - `lib/display.js` — terminal formatting
-- `db/schema.sql` — SQLite schema
+- `db/schema.sql` — SQLite schema (task state + append-only events)
 - `db/cortex.db` — local operational database, ignored by git
 
-Phase 2 introduces service-mode access (`/v1/health`, `/v1/status`, `/v1/tasks`) with scoped token auth and stable response envelopes.
+Phase 2 introduced service-mode access (`/v1/health`, `/v1/status`, `/v1/tasks`) with scoped token auth and stable response envelopes.
+
+Phase 3 foundation now includes stable task identity fields and append-only audit event emission across lifecycle operations.
 
 ## Target state
 
@@ -63,7 +66,7 @@ The local SQLite database is the source of truth for that environment.
 
 ## State vs event ledger
 
-CORTEX should keep both:
+CORTEX keeps both:
 
 - current state for fast task lookup and reporting;
 - append-only events for audit, replay, sync, and debugging.
