@@ -35,3 +35,14 @@ jobs:
           node cortex.js add "CI smoke task" --assign isbe --project cortex --priority normal --tag ci
           node cortex.js list --project cortex
           node cortex.js done 1 --notes "CI smoke complete"
+
+      - name: Daemon API smoke
+        run: |
+          CORTEX_API_TOKENS='reader:read;writer:read,write' node cortexd.js > /tmp/cortexd.log 2>&1 &
+          CORTEXD_PID=$!
+          sleep 1
+          curl -fsS http://127.0.0.1:8777/v1/health >/dev/null
+          curl -fsS -H 'Authorization: Bearer reader' http://127.0.0.1:8777/v1/status >/dev/null
+          curl -fsS -X POST -H 'Authorization: Bearer writer' -H 'Content-Type: application/json' \
+            -d '{"title":"CI API task","project":"cortex"}' http://127.0.0.1:8777/v1/tasks >/dev/null
+          kill $CORTEXD_PID

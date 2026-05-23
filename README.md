@@ -65,11 +65,49 @@ node cortex.js list --status blocked
 node cortex.js get 42
 ```
 
+## Daemon API (Phase 2)
+
+CORTEX now ships a minimal local daemon with a versioned REST API.
+
+Start daemon:
+
+```bash
+node db/init.js
+CORTEX_API_TOKENS='reader:read;writer:write,read' node cortexd.js
+```
+
+Config env vars:
+
+- `CORTEX_DB_PATH` — SQLite path (default `./db/cortex.db`)
+- `CORTEX_API_HOST` — bind host (default `127.0.0.1`)
+- `CORTEX_API_PORT` — bind port (default `8777`)
+- `CORTEX_API_AUTH_REQUIRED` — `1` (default) or `0`
+- `CORTEX_API_TOKENS` — scoped token list (`token:scope1,scope2;token2:scope1`)
+- `CORTEX_API_TOKEN` + `CORTEX_API_SCOPES` — single-token shortcut
+
+Current endpoints:
+
+- `GET /v1/health` (public)
+- `GET /v1/status` (`read`)
+- `GET /v1/tasks` (`read`)
+- `GET /v1/tasks/:id` (`read`)
+- `POST /v1/tasks` (`write`)
+
+All responses use a stable envelope:
+
+```json
+{ "success": true, "data": {} }
+{ "success": false, "error": { "code": "...", "message": "..." } }
+```
+
+See [`docs/API.md`](docs/API.md) for request/response examples.
+
 ## Operator docs
 
 - [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) — enterprise roadmap and execution phases.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current/target architecture.
 - [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — install, operations, backup/restore.
+- [`docs/API.md`](docs/API.md) — daemon API and auth scopes.
 - [`configs/example.yaml`](configs/example.yaml) — future daemon/config baseline.
 
 ## Notes

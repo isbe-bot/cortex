@@ -28,6 +28,28 @@ node cortex.js list --status needs-input
 node cortex.js orphans
 ```
 
+## Daemon/API operations
+
+```bash
+# start daemon with scoped auth
+CORTEX_API_TOKENS='reader:read;writer:read,write' node cortexd.js
+
+# health (public)
+curl -s http://127.0.0.1:8777/v1/health
+
+# status/tasks (auth)
+curl -s -H 'Authorization: Bearer reader' http://127.0.0.1:8777/v1/status
+curl -s -H 'Authorization: Bearer reader' http://127.0.0.1:8777/v1/tasks
+```
+
+Env vars:
+
+- `CORTEX_API_HOST` (default `127.0.0.1`)
+- `CORTEX_API_PORT` (default `8777`)
+- `CORTEX_API_AUTH_REQUIRED` (`1` default, `0` to disable)
+- `CORTEX_API_TOKENS` (`token:scope1,scope2;token2:scope`)
+- `CORTEX_API_TOKEN` + `CORTEX_API_SCOPES` (single-token shortcut)
+
 ## Task lifecycle
 
 ```bash

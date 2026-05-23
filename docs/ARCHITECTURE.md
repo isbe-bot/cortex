@@ -6,15 +6,17 @@ It is designed to be deployed per VPS/client environment and remain authoritativ
 
 ## Current state
 
-The current implementation is a Node.js CLI backed by SQLite:
+Current implementation is a Node.js CLI + minimal daemon, both backed by SQLite:
 
 - `cortex.js` — CLI command surface
+- `cortexd.js` — HTTP daemon entrypoint
 - `lib/tasks.js` — task data access helpers
+- `lib/api/*` — API routes, scoped auth, validation, envelopes
 - `lib/display.js` — terminal formatting
 - `db/schema.sql` — SQLite schema
 - `db/cortex.db` — local operational database, ignored by git
 
-This has proven the workflow. The next architecture increment turns it into an enterprise-grade local service.
+Phase 2 introduces service-mode access (`/v1/health`, `/v1/status`, `/v1/tasks`) with scoped token auth and stable response envelopes.
 
 ## Target state
 
