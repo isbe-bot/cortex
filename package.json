@@ -2,6 +2,23 @@
   "name": "cortex",
   "version": "1.0.0",
   "description": "CORTEX — local-first task operations core for AI-agent work",
+  "license": "MIT",
+  "homepage": "https://github.com/isbe-bot/cortex#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isbe-bot/cortex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/isbe-bot/cortex/issues"
+  },
+  "keywords": [
+    "ai-agents",
+    "task-management",
+    "sqlite",
+    "cli",
+    "local-first",
+    "openclaw"
+  ],
   "main": "cortex.js",
   "bin": {
     "cortex": "./cortex.js"
