@@ -1,0 +1,24 @@
+{
+  "name": "cortex",
+  "version": "0.1.0",
+  "description": "CORTEX task operations core integration for OpenClaw",
+  "author": "ISBE",
+  "homepage": "https://github.com/isbe-bot/cortex",
+  "entry": "index.js",
+  "tools": [
+    "cortex.status",
+    "cortex.list",
+    "cortex.get",
+    "cortex.add",
+    "cortex.update",
+    "cortex.block",
+    "cortex.done",
+    "cortex.input",
+    "cortex.next"
+  ],
+  "config": {
+    "baseUrl": "http://127.0.0.1:8777",
+    "token": "",
+    "timeoutMs": 10000
+  }
+}
