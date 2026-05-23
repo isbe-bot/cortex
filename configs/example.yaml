@@ -1,0 +1,32 @@
+server:
+  bind: "127.0.0.1"
+  port: 8797
+  # Future scoped token model, mirroring ENGRAM.
+  api_key: ""
+  # api_keys:
+  #   - name: read-client
+  #     token: ""
+  #     scopes: [read]
+  #   - name: operator
+  #     token: ""
+  #     scopes: [read, write, assign]
+  #   - name: admin
+  #     token: ""
+  #     scopes: [admin]
+
+storage:
+  sqlite_path: "./data/cortex.sqlite"
+
+instance:
+  instance_id: "local-dev"
+  client_slug: "local"
+  environment: "development"
+
+retention:
+  done_archive_days: 90
+  cancelled_archive_days: 30
+  event_retention_days: 365
+
+sync:
+  enabled: false
+  endpoint: ""

@@ -1,12 +1,18 @@
 {
   "name": "cortex",
   "version": "1.0.0",
-  "description": "CORTEX — Agent coordination and task tracking system",
+  "description": "CORTEX — local-first task operations core for AI-agent work",
   "main": "cortex.js",
+  "bin": {
+    "cortex": "./cortex.js"
+  },
   "scripts": {
     "init": "node db/init.js",
     "seed": "node cortex.js seed",
     "test": "node --test tests/seed-guard.test.js"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "dependencies": {
     "better-sqlite3": "^9.0.0"

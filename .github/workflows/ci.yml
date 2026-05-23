@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: CLI smoke
+        run: |
+          node db/init.js
+          node cortex.js status
+          node cortex.js add "CI smoke task" --assign isbe --project cortex --priority normal --tag ci
+          node cortex.js list --project cortex
+          node cortex.js done 1 --notes "CI smoke complete"
