@@ -226,6 +226,7 @@ CORTEX is localhost-first by default.
 - [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — install, operations, backup, and restore.
 - [`docs/API.md`](docs/API.md) — daemon API and auth scopes.
 - [`docs/ENGRAM-CORTEX.md`](docs/ENGRAM-CORTEX.md) — memory/work operating model.
+- [`docs/AGENT_INTEGRATION.md`](docs/AGENT_INTEGRATION.md) — OpenClaw/agent task lifecycle guide.
 - [`docs/OPENAPI.md`](docs/OPENAPI.md) — lightweight OpenAPI sketch.
 - [`configs/example.yaml`](configs/example.yaml) — future daemon/config baseline.
 

@@ -151,3 +151,7 @@ Before deploying to client VPS environments, CORTEX needs:
 - backup/export/import commands;
 - systemd service;
 - OpenClaw plugin integration.
+
+## Agent operations
+
+Agents and OpenClaw integrations should follow [`AGENT_INTEGRATION.md`](AGENT_INTEGRATION.md) for task creation, lifecycle updates, blockers, input requests, subagent handoffs, and completion evidence.
