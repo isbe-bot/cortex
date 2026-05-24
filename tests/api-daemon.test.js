@@ -40,7 +40,7 @@ async function withServer(dbPath, auth, fn) {
   process.env.CORTEX_DB_PATH = dbPath;
   resetRuntimeModules();
   const { createApiServer } = require('../lib/api/server');
-  const server = createApiServer({ auth, dbPath });
+  const server = createApiServer({ auth, dbPath, requestLogging: false });
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
@@ -155,4 +155,98 @@ test('API returns safe validation and not-found envelopes', async () => {
     assert.equal(missing.status, 404);
     assert.equal(missing.json.error.code, 'NOT_FOUND');
   });
+});
+
+test('API supports update and lifecycle action routes', async () => {
+  const dbPath = tmpDbPath();
+  initDb(dbPath);
+
+  const auth = {
+    requireAuth: true,
+    tokens: new Map([
+      ['rw-token', new Set(['read', 'write'])],
+    ]),
+  };
+
+  await withServer(dbPath, auth, async ({ request }) => {
+    const created = await request('/v1/tasks', {
+      method: 'POST',
+      token: 'rw-token',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'route task', project: 'cortex' }),
+    });
+    const id = created.json.data.id;
+
+    const updated = await request(`/v1/tasks/${id}`, {
+      method: 'PATCH',
+      token: 'rw-token',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'in-progress', progress: 40, step: 'api-route' }),
+    });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.json.data.status, 'in-progress');
+    assert.equal(updated.json.data.progress, 40);
+
+    const input = await request(`/v1/tasks/${id}/input`, {
+      method: 'POST',
+      token: 'rw-token',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'Need detail?' }),
+    });
+    assert.equal(input.status, 200);
+    assert.equal(input.json.data.status, 'needs-input');
+
+    const block = await request(`/v1/tasks/${id}/block`, {
+      method: 'POST',
+      token: 'rw-token',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'waiting' }),
+    });
+    assert.equal(block.status, 200);
+    assert.equal(block.json.data.status, 'blocked');
+
+    const done = await request(`/v1/tasks/${id}/done`, {
+      method: 'POST',
+      token: 'rw-token',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    assert.equal(done.status, 200);
+    assert.equal(done.json.data.status, 'done');
+  });
+});
+
+test('API rate limits excessive requests with a structured envelope', async () => {
+  const dbPath = tmpDbPath();
+  initDb(dbPath);
+
+  const auth = { requireAuth: false, tokens: new Map() };
+
+  const previousDbPath = process.env.CORTEX_DB_PATH;
+  process.env.CORTEX_DB_PATH = dbPath;
+  resetRuntimeModules();
+  const { createApiServer } = require('../lib/api/server');
+  const server = createApiServer({
+    auth,
+    dbPath,
+    rateLimitWindowMs: 60_000,
+    rateLimitMax: 1,
+    requestLogging: false,
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const first = await fetch(`${baseUrl}/v1/health`);
+    assert.equal(first.status, 200);
+    const second = await fetch(`${baseUrl}/v1/health`);
+    const json = await second.json();
+    assert.equal(second.status, 429);
+    assert.equal(json.error.code, 'RATE_LIMITED');
+    assert.ok(second.headers.get('retry-after'));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    if (previousDbPath === undefined) delete process.env.CORTEX_DB_PATH;
+    else process.env.CORTEX_DB_PATH = previousDbPath;
+  }
 });

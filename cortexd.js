@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const { createApiServer } = require('./lib/api/server');
 const { buildAuthFromEnv } = require('./lib/api/auth');
 const { resolveDbPath, resolveApiConfig, mergeEnv, loadFileConfig } = require('./lib/config');
+const { init } = require('./db/init');
 
 function die(msg) {
   console.error(msg);
@@ -13,7 +14,7 @@ function die(msg) {
 function ensureDb() {
   const dbPath = resolveDbPath(process.env);
   if (!fs.existsSync(dbPath)) {
-    die(`Database not initialized at ${dbPath}. Run: node db/init.js`);
+    init();
   }
   return dbPath;
 }
@@ -31,12 +32,20 @@ function main() {
   const host = apiConfig.host;
   const port = apiConfig.port;
 
-  const server = createApiServer({ auth, dbPath });
+  const server = createApiServer({
+    auth,
+    dbPath,
+    rateLimitWindowMs: apiConfig.rateLimitWindowMs,
+    rateLimitMax: apiConfig.rateLimitMax,
+    requestLogging: apiConfig.requestLogging,
+  });
 
   server.listen(port, host, () => {
     console.log(`cortexd listening on http://${host}:${port}`);
     console.log(`db: ${dbPath}`);
     console.log(`auth required: ${auth.requireAuth ? 'yes' : 'no'}`);
+    console.log(`rate limit: ${apiConfig.rateLimitMax}/${apiConfig.rateLimitWindowMs}ms`);
+    console.log(`request logging: ${apiConfig.requestLogging ? 'yes' : 'no'}`);
     if (configPath) console.log(`config: ${configPath}`);
   });
 

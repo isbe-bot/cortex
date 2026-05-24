@@ -27,6 +27,6 @@ ENV CORTEX_CONFIG=/etc/cortex/cortex.env
 EXPOSE 8777
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "require('http').get('http://127.0.0.1:8777/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+  CMD node -e "require('http').get('http://127.0.0.1:8777/v1/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
 CMD ["node", "cortexd.js"]

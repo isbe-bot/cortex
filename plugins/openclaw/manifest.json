@@ -6,6 +6,7 @@
   "homepage": "https://github.com/isbe-bot/cortex",
   "entry": "index.js",
   "tools": [
+    "cortex.health",
     "cortex.status",
     "cortex.list",
     "cortex.get",
@@ -14,6 +15,10 @@
     "cortex.block",
     "cortex.done",
     "cortex.input",
+    "cortex.cancel",
+    "cortex.report.summary",
+    "cortex.report.blocked",
+    "cortex.report.overdue",
     "cortex.next"
   ],
   "config": {
